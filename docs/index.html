@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Guia passo a passo para configurar um ambiente local de Kubernetes no Windows." />
+  <title>DevOps Lab — Setup Local Kubernetes</title>
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="container">
+      <span class="badge">&#9881; DevOps Lab</span>
+      <h1>Setup Local <span>Kubernetes</span></h1>
+      <p>Ambiente completo com Docker Desktop, Minikube e kubectl no Windows — do zero em ~20 minutos.</p>
+    </div>
+  </header>
+
+  <!-- ── Nav ── -->
+  <nav>
+    <div class="container">
+      <ul>
+        <li><a href="#prereqs">&#10003; Pré-req</a></li>
+        <li><a href="#step1">1. PS Admin</a></li>
+        <li><a href="#step2">2. Choco</a></li>
+        <li><a href="#step3">3. Install</a></li>
+        <li><a href="#step4">4. Docker</a></li>
+        <li><a href="#step5">5. Minikube</a></li>
+        <li><a href="#step6">6. Verificar</a></li>
+        <li><a href="#step7">7. Validar</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ── Main ── -->
+  <main>
+    <div class="container">
+
+      <!-- Pré-requisitos -->
+      <section class="step" id="prereqs">
+        <div class="step-header">
+          <span class="step-number" style="background:var(--accent);font-size:.85rem;padding:.35rem .6rem;">PRÉ</span>
+          <h2>Pré-requisitos</h2>
+        </div>
+        <p>
+          Verifique cada item abaixo <strong>antes</strong> de iniciar a instalação.
+          Clique nos links para acessar as instruções oficiais de cada dependência.
+        </p>
+
+        <table style="width:100%;border-collapse:collapse;font-size:.9rem;margin-top:.75rem;">
+          <thead>
+            <tr style="background:var(--surface);border-bottom:2px solid var(--border);">
+              <th style="text-align:left;padding:.5rem .75rem;width:30%;">Dependência</th>
+              <th style="text-align:left;padding:.5rem .75rem;">Versão mínima / usada neste lab</th>
+              <th style="text-align:left;padding:.5rem .75rem;width:7rem;">Guia</th>
+            </tr>
+          </thead>
+          <tbody>
+
+            <!-- Sistema Operacional -->
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:.6rem .75rem;font-weight:600;">Sistema Operacional</td>
+              <td style="padding:.6rem .75rem;">
+                Mínimo: Windows 10 64-bit (Build 19041+) ou Windows 11<br/>
+                <span style="color:var(--muted);font-size:.82rem;">Lab: Windows 11 Enterprise · Build 26200 · 64-bit</span>
+              </td>
+              <td style="padding:.6rem .75rem;text-align:center;">
+                <a href="prereqs/so.html" title="Ver guia: Sistema Operacional" style="display:inline-flex;align-items:center;gap:.4rem;text-decoration:none;color:var(--accent);font-size:.82rem;">
+                  <img src="assets/img/guide-icon.svg" width="22" height="22" alt="guia" style="vertical-align:middle;"/> Ver guia
+                </a>
+              </td>
+            </tr>
+
+            <!-- WSL 2 -->
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:.6rem .75rem;font-weight:600;">WSL 2<br/><span style="font-weight:400;color:var(--muted);font-size:.82rem;">Windows Subsystem for Linux</span></td>
+              <td style="padding:.6rem .75rem;">
+                Mínimo: WSL 2.x · Kernel 5.15+<br/>
+                <span style="color:var(--muted);font-size:.82rem;">Lab: WSL 2.6.1.0 · Kernel 6.6.87.2-1 · WSLg 1.0.66</span>
+              </td>
+              <td style="padding:.6rem .75rem;text-align:center;">
+                <a href="prereqs/wsl2.html" title="Ver guia: WSL 2" style="display:inline-flex;align-items:center;gap:.4rem;text-decoration:none;color:var(--accent);font-size:.82rem;">
+                  <img src="assets/img/guide-icon.svg" width="22" height="22" alt="guia" style="vertical-align:middle;"/> Ver guia
+                </a>
+              </td>
+            </tr>
+
+            <!-- VirtualMachinePlatform -->
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:.6rem .75rem;font-weight:600;">Virtualização<br/><span style="font-weight:400;color:var(--muted);font-size:.82rem;">VirtualMachinePlatform</span></td>
+              <td style="padding:.6rem .75rem;">
+                Mínimo: BIOS/UEFI habilitada + VirtualMachinePlatform ativado<br/>
+                <span style="color:var(--muted);font-size:.82rem;">Lab: HypervisorPresent: True · VirtualMachinePlatform: Enabled</span>
+              </td>
+              <td style="padding:.6rem .75rem;text-align:center;">
+                <a href="prereqs/virtualizacao.html" title="Ver guia: Virtualização" style="display:inline-flex;align-items:center;gap:.4rem;text-decoration:none;color:var(--accent);font-size:.82rem;">
+                  <img src="assets/img/guide-icon.svg" width="22" height="22" alt="guia" style="vertical-align:middle;"/> Ver guia
+                </a>
+              </td>
+            </tr>
+
+            <!-- .NET Framework -->
+            <tr>
+              <td style="padding:.6rem .75rem;font-weight:600;">.NET Framework</td>
+              <td style="padding:.6rem .75rem;">
+                Mínimo: .NET Framework 4.8+<br/>
+                <span style="color:var(--muted);font-size:.82rem;">Lab: .NET Framework 4.8.09221 (Release 533509) · .NET Runtime 9.0.18</span>
+              </td>
+              <td style="padding:.6rem .75rem;text-align:center;">
+                <a href="prereqs/dotnet.html" title="Ver guia: .NET Framework" style="display:inline-flex;align-items:center;gap:.4rem;text-decoration:none;color:var(--accent);font-size:.82rem;">
+                  <img src="assets/img/guide-icon.svg" width="22" height="22" alt="guia" style="vertical-align:middle;"/> Ver guia
+                </a>
+              </td>
+            </tr>
+
+          </tbody>
+        </table>
+
+        <div class="tip" style="margin-top:1rem;">
+          &#9432; O <strong>WSL 2</strong> e o <strong>VirtualMachinePlatform</strong> são instalados automaticamente com o comando
+          <code>wsl --install</code> no Windows 10/11. No Windows 11 eles geralmente já estão habilitados por padrão.
+        </div>
+        <div class="tip" style="background:#1c2a1c;border-color:#3fb950;border-left-color:#3fb950;color:#7ee787;">
+          &#9989; <strong>Ambiente validado neste lab:</strong> Windows 11 Enterprise Build 26200 · WSL 2.6.1.0 · Kernel 6.6.87.2 ·
+          VirtualMachinePlatform Enabled · .NET Framework 4.8.09221 · .NET Runtime 9.0.18
+        </div>
+      </section>
+
+      <!-- Step 1 -->
+      <section class="step" id="step1">
+        <div class="step-header">
+          <span class="step-number">1</span>
+          <h2>Abrir o PowerShell como Administrador</h2>
+        </div>
+        <p>
+          Pressione <strong>Win + X</strong> e selecione <strong>Terminal (Admin)</strong> ou
+          <strong>Windows PowerShell (Admin)</strong>. Privilégios elevados são necessários para
+          instalar ferramentas no sistema.
+        </p>
+        <div class="tip">
+          &#9432; No Windows 11 o atalho abre o Terminal do Windows. Certifique-se de que o perfil ativo é o PowerShell.
+        </div>
+      </section>
+
+      <!-- Step 2 -->
+      <section class="step" id="step2">
+        <div class="step-header">
+          <span class="step-number">2</span>
+          <h2>Instalar o Chocolatey</h2>
+        </div>
+        <p>
+          O <strong>Chocolatey</strong> é o gerenciador de pacotes do Windows.
+          Execute os dois comandos abaixo no PowerShell Admin:
+        </p>
+        <pre><code><span class="comment"># Habilitar execução de scripts</span>
+<span class="cmd">Set-ExecutionPolicy</span> <span class="flag">-ExecutionPolicy</span> RemoteSigned <span class="flag">-Scope</span> CurrentUser <span class="flag">-Force</span>
+
+<span class="comment"># Baixar e instalar o Chocolatey</span>
+<span class="cmd">Invoke-Expression</span> ((New-Object System.Net.WebClient).DownloadString(<span class="flag">'https://community.chocolatey.org/install.ps1'</span>))</code></pre>
+        <div class="tip">
+          &#9432; <strong>Chocolatey já instalado?</strong> Verifique a versão atual e faça o upgrade se necessário:
+        </div>
+        <pre><code><span class="comment"># Verificar a versão instalada</span>
+<span class="cmd">choco</span> <span class="flag">--version</span>
+
+<span class="comment"># Atualizar o Chocolatey para a versão mais recente</span>
+<span class="cmd">choco upgrade</span> chocolatey <span class="flag">-y</span></code></pre>
+        <div class="tip" style="background:#1c1f2a;border-color:#58a6ff;border-left-color:#58a6ff;color:#a5c8ff;">
+          &#9888; <strong>Após o upgrade</strong>, feche e reabra o PowerShell antes de continuar. As variáveis de ambiente (PATH) são atualizadas apenas em sessões novas. Alternativamente, atualize as variáveis sem fechar o terminal:
+        </div>
+        <pre><code><span class="comment"># Opção 1 — se o perfil do Chocolatey já estiver carregado na sessão</span>
+<span class="cmd">refreshenv</span>
+
+<span class="comment"># Opção 2 — se refreshenv não for reconhecido, importe o módulo primeiro</span>
+<span class="cmd">Import-Module</span> <span class="flag">"$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"</span>
+<span class="cmd">refreshenv</span></code></pre>
+      </section>
+
+      <!-- Step 3 -->
+      <section class="step" id="step3">
+        <div class="step-header">
+          <span class="step-number">3</span>
+          <h2>Instalar as Ferramentas</h2>
+        </div>
+        <p>Instale as três ferramentas uma por uma. O processo leva aproximadamente <strong>15–20 minutos</strong>.</p>
+
+        <div class="tools-grid">
+          <div class="tool-card">
+            <div class="tool-name">docker-desktop</div>
+            <div class="tool-desc">Motor de containers — executa containers Docker localmente e serve de driver para o Minikube.</div>
+          </div>
+          <div class="tool-card">
+            <div class="tool-name">minikube</div>
+            <div class="tool-desc">Sobe um cluster Kubernetes local de nó único, ideal para desenvolvimento e testes.</div>
+          </div>
+          <div class="tool-card">
+            <div class="tool-name">kubernetes-cli</div>
+            <div class="tool-desc">Instala o <code>kubectl</code>, a CLI oficial para interagir com qualquer cluster Kubernetes.</div>
+          </div>
+        </div>
+
+        <pre><code><span class="cmd">choco install</span> docker-desktop     <span class="flag">-y --no-progress</span>
+<span class="cmd">choco install</span> minikube           <span class="flag">-y --no-progress</span>
+<span class="cmd">choco install</span> kubernetes-cli     <span class="flag">-y --no-progress</span></code></pre>
+        <div class="tip">
+          &#9432; O <code>choco install minikube</code> já instala o <strong>kubernetes-cli</strong> automaticamente como dependência. O terceiro comando é seguro de executar mesmo assim — se o <code>kubectl</code> já estiver instalado, o Chocolatey apenas informa e segue sem erros.
+        </div>
+        <div class="tip" style="background:#2a1c1c;border-color:#f85149;border-left-color:#f85149;color:#ffa198;">
+          &#9888; O <strong>docker-desktop</strong> solicita <strong>reinicialização</strong> ao final da instalação (<code>exit code 3010</code>). Conclua a instalação das três ferramentas antes de reiniciar.
+        </div>
+      </section>
+
+      <!-- Step 4 -->
+      <section class="step" id="step4">
+        <div class="step-header">
+          <span class="step-number">4</span>
+          <h2>Reiniciar e Verificar o Docker Desktop</h2>
+        </div>
+        <div class="tip" style="background:#2a1c1c;border-color:#f85149;border-left-color:#f85149;color:#ffa198;">
+          &#9888; <strong>Reinicie o computador antes de continuar.</strong> A instalação do Docker Desktop registra drivers e componentes de rede que só ficam ativos após o reboot (<code>exit code 3010</code>). Sem reiniciar, o <code>minikube start</code> vai falhar.
+        </div>
+        <p>
+          Após o reboot, verifique a <strong>bandeja do sistema</strong> (canto inferior direito da tela):
+        </p>
+        <ul style="color:var(--muted);margin:.5rem 0 .75rem 1.5rem;">
+          <li>Se o ícone do Docker Desktop já estiver presente e estável — ele iniciou automaticamente com o Windows. ✅ Pode seguir para o próximo passo.</li>
+          <li>Se o ícone não estiver presente — abra o <strong>Docker Desktop</strong> manualmente pelo Menu Iniciar e aguarde <strong>1–2 minutos</strong> até estabilizar.</li>
+        </ul>
+        <div class="tip" style="background:#1c2a1c;border-color:#3fb950;border-left-color:#3fb950;color:#7ee787;">
+          &#128270; <strong>Observação confirmada (docker-desktop v4.84.0 / Windows 11 Enterprise 25H2):</strong>
+          o Docker Desktop <strong>não iniciou automaticamente</strong> após o reboot — o ícone <em>não</em> apareceu na bandeja do sistema e o serviço <code>com.docker.service</code> permaneceu com status <code>Stopped / StartType: Manual</code>.
+          Não há entrada de autostart em <code>HKCU\…\Run</code> nem em <code>HKLM\…\Run</code> para o Docker Desktop nessa instalação via Chocolatey.
+          Foi necessário abri-lo manualmente pelo Menu Iniciar antes de executar o <code>minikube start</code>.
+          Se quiser que ele inicie automaticamente, habilite a opção em <strong>Docker Desktop → Settings → General → Start Docker Desktop when you sign in</strong>.
+        </div>
+        <div class="tip">
+          &#9432; Por padrão o Docker Desktop se configura para iniciar com o Windows, mas esse comportamento <strong>não se aplicou</strong> nesta instalação — veja observação acima.
+        </div>
+        <div class="tip" style="background:#2a1c1c;border-color:#f85149;border-left-color:#f85149;color:#ffa198;">
+          &#9888; O Minikube usa o Docker como driver. Se o Docker Desktop não estiver rodando, o próximo passo vai falhar.
+        </div>
+      </section>
+
+      <!-- Step 5 -->
+      <section class="step" id="step5">
+        <div class="step-header">
+          <span class="step-number">5</span>
+          <h2>Iniciar o Minikube</h2>
+        </div>
+        <p>
+          Abra um <strong>novo PowerShell sem privilégios de admin</strong> e execute:
+        </p>
+        <pre><code><span class="cmd">minikube start</span> <span class="flag">--cpus=2 --memory=2048 --driver=docker</span></code></pre>
+        <p>
+          Isso cria um cluster Kubernetes local com <strong>2 CPUs</strong> e <strong>2 GB de RAM</strong>,
+          usando o Docker Desktop como backend.
+        </p>
+      </section>
+
+      <!-- Step 6 -->
+      <section class="step" id="step6">
+        <div class="step-header">
+          <span class="step-number">6</span>
+          <h2>Verificar o Cluster</h2>
+        </div>
+        <p>Confirme que o cluster está ativo e saudável com os comandos abaixo:</p>
+        <pre><code><span class="comment"># Exibe a URL do control-plane</span>
+<span class="cmd">kubectl cluster-info</span>
+
+<span class="comment"># Lista os nós (deve aparecer "minikube   Ready")</span>
+<span class="cmd">kubectl get nodes</span>
+
+<span class="comment"># Lista os 7 pods do sistema — todos devem estar "Running"</span>
+<span class="cmd">kubectl get pods</span> <span class="flag">-n kube-system</span></code></pre>
+        <div class="tip">
+          &#10003; Se o nó aparecer com status <strong>Ready</strong> e os 7 pods do <code>kube-system</code> com status <strong>Running</strong>, seu ambiente está pronto para uso!
+        </div>
+        <div class="tip" style="background:#1c2a1c;border-color:#3fb950;border-left-color:#3fb950;color:#7ee787;">
+          &#9989; <strong>Validado com sucesso</strong> — minikube v1.38.1 · kubernetes-cli v1.36.3 · docker-desktop v4.84.0 · Windows 11 Enterprise 25H2:<br />
+          <code>kubectl cluster-info</code> → <em>Kubernetes control plane is running at https://127.0.0.1:57047</em><br />
+          <code>kubectl get nodes</code> → <em>minikube &nbsp; Ready &nbsp; control-plane &nbsp; v1.35.1 &nbsp; docker://29.2.1</em>
+        </div>
+      </section>
+
+      <!-- Step 7 -->
+      <section class="step" id="step7">
+        <div class="step-header">
+          <span class="step-number">7</span>
+          <h2>Validar o Ambiente — Testes End-to-End</h2>
+        </div>
+        <p>
+          Com o cluster rodando, execute os testes abaixo para confirmar que o ambiente funciona
+          de ponta a ponta. São dois níveis progressivos.
+        </p>
+
+        <!-- Nível 1 -->
+        <h3 style="font-size:.9rem;font-weight:600;color:var(--accent);margin:.75rem 0 .4rem;">
+          &#128309; Nível 1 — Cluster básico
+        </h3>
+        <p>Confirme que o cluster responde corretamente a consultas simples:</p>
+        <pre><code><span class="comment"># O nó deve aparecer como "Ready"</span>
+<span class="cmd">kubectl get nodes</span>
+
+<span class="comment"># Deve mostrar a URL do control-plane</span>
+<span class="cmd">kubectl cluster-info</span>
+
+<span class="comment"># Deve listar 7 pods todos "Running"</span>
+<span class="cmd">kubectl get pods</span> <span class="flag">-n kube-system</span></code></pre>
+
+        <!-- Nível 2 -->
+        <h3 style="font-size:.9rem;font-weight:600;color:var(--accent);margin:1rem 0 .4rem;">
+          &#128309; Nível 2 — Deploy real de uma aplicação
+        </h3>
+        <p>O teste mais direto: subir um container e acessá-lo no navegador:</p>
+        <pre><code><span class="comment"># Faz deploy de um nginx</span>
+<span class="cmd">kubectl create deployment</span> nginx <span class="flag">--image=nginx</span>
+
+<span class="comment"># Expõe na porta 80 via NodePort</span>
+<span class="cmd">kubectl expose deployment</span> nginx <span class="flag">--type=NodePort --port=80</span>
+
+<span class="comment"># Aguarda o pod ficar Ready</span>
+<span class="cmd">kubectl rollout status deployment/nginx</span>
+
+<span class="comment"># Obtém a URL para acessar no navegador</span>
+<span class="cmd">minikube service</span> nginx <span class="flag">--url</span></code></pre>
+        <div class="tip">
+          &#9432; Abra a URL retornada no navegador. Deve aparecer a página <strong>"Welcome to nginx!"</strong>.
+          Se aparecer, o ambiente está <strong>100% funcional end-to-end</strong>.
+        </div>
+        <div class="tip" style="background:#2a1c1c;border-color:#f85149;border-left-color:#f85149;color:#ffa198;">
+          &#9888; Após os testes, remova os recursos criados para manter o cluster limpo:
+        </div>
+        <pre><code><span class="cmd">kubectl delete deployment</span> nginx
+<span class="cmd">kubectl delete service</span> nginx</code></pre>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ── Footer ── -->
+  <footer>
+    <p>DevOps Lab &mdash; Guia de Setup Local Kubernetes &mdash; 2026</p>
+  </footer>
+
+  <script src="assets/js/main.js"></script>
+</body>
+</html>

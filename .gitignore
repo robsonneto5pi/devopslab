@@ -1,0 +1,37 @@
+﻿# ── Sistema Operacional ──
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# ── Editores e IDEs ──
+.vscode/
+.idea/
+*.suo
+*.user
+*.swp
+*.swo
+*~
+
+# ── Logs e temporários ──
+*.log
+*.tmp
+*.bak
+*.orig
+*.rej
+
+# ── Node (caso usado futuramente) ──
+node_modules/
+npm-debug.log*
+
+# ── Segredos e credenciais ──
+.env
+.env.*
+*.pem
+*.key
+
+# ── Kubernetes / Minikube (artefatos locais) ──
+.minikube/
+kubeconfig
+*.kubeconfig
