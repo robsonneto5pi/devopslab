@@ -4,7 +4,8 @@ FROM node:18-alpine AS builder
 WORKDIR /build
 
 COPY src/package.json ./
-RUN npm install --production
+# npm install --omit=dev; cria node_modules mesmo sem dependências
+RUN npm install --omit=dev
 
 # ── Stage 2: runtime ──────────────────────────────────────
 FROM node:18-alpine AS runtime
@@ -17,8 +18,7 @@ RUN mkdir -p /app/cache /app/logs
 # Usar usuário não-root (uid 1000 = node)
 USER node
 
-# Copiar dependências e código do stage builder
-COPY --from=builder --chown=node:node /build/node_modules ./node_modules
+# Copiar package.json e código
 COPY --chown=node:node src/ ./
 
 EXPOSE 3000
