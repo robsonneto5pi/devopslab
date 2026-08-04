@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Desafio 4 — Deploy de aplicação Node.js no Kubernetes com Minikube." />
+  <title>Desafio 4 — Deploy Node.js no Kubernetes</title>
+  <link rel="stylesheet" href="../../assets/css/style.css" />
+</head>
+<body>
+
+  <header>
+    <div class="container">
+      <span class="badge">&#127381; Desafio 4</span>
+      <h1>Deploy <span>Node.js</span> no Kubernetes</h1>
+      <p>Aplicação Node.js com Deployment, Ingress, HPA e NetworkPolicy no Minikube — acesso via browser em <code style="color:#3fb950;">http://app.local</code>.</p>
+    </div>
+  </header>
+
+  <nav>
+    <div class="container">
+      <ul>
+        <li><a href="../../index.html" style="display:inline-flex;align-items:center;gap:.35rem;"><img src="../../assets/img/home-icon.svg" width="14" height="14" alt=""/> Portal</a></li>
+        <li><a href="#visao-geral">Visão Geral</a></li>
+        <li><a href="#step1">1. Minikube</a></li>
+        <li><a href="#step2">2. App</a></li>
+        <li><a href="#step3">3. Docker</a></li>
+        <li><a href="#step4">4. Manifests</a></li>
+        <li><a href="#step5">5. Ingress</a></li>
+        <li><a href="#step6">6. Validar</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="container">
+
+      <!-- Visão Geral -->
+      <section class="step" id="visao-geral">
+        <div class="step-header">
+          <span class="step-number" style="background:#2a1f3b;color:#bc8cff;border-color:#bc8cff;font-size:.75rem;">INFO</span>
+          <h2>Visão Geral</h2>
+        </div>
+        <p>Objetivo: fazer o deploy de uma aplicação Node.js no Minikube e acessá-la no browser via Ingress.</p>
+        <div class="tools-grid">
+          <div class="tool-card">
+            <div class="tool-name">src/app.js</div>
+            <div class="tool-desc">Servidor HTTP Node.js puro com 4 rotas: <code>/</code> <code>/health</code> <code>/health/ready</code> <code>/metrics</code> — graceful shutdown incluído.</div>
+          </div>
+          <div class="tool-card">
+            <div class="tool-name">Dockerfile</div>
+            <div class="tool-desc">Multi-stage build — stage builder (npm install) + stage runtime (USER node, HEALTHCHECK).</div>
+          </div>
+          <div class="tool-card">
+            <div class="tool-name">k8s/ (10 manifests)</div>
+            <div class="tool-desc">Namespace · ServiceAccount · ConfigMap · Secret · Deployment · Service · Ingress · HPA · PDB · NetworkPolicy.</div>
+          </div>
+        </div>
+        <div class="tip" style="background:#1c1f2a;border-color:#58a6ff;border-left-color:#58a6ff;color:#a5c8ff;">
+          &#9432; Todos os arquivos de código estão em <code>src/desafios/desafio-04/</code> na raiz do repositório.
+        </div>
+      </section>
+
+      <!-- Step 1 -->
+      <section class="step" id="step1">
+        <div class="step-header">
+          <span class="step-number">1</span>
+          <h2>Subir o Minikube</h2>
+        </div>
+        <p>Abra o <strong>Docker Desktop</strong> manualmente e aguarde estabilizar. Depois, em um PowerShell comum (sem admin):</p>
+        <pre><code><span class="cmd">minikube start</span> <span class="flag">--cpus=2 --memory=2048 --driver=docker</span></code></pre>
+        <div class="tip">&#10003; Aguarde a mensagem <strong>"Done! kubectl is now configured"</strong> antes de continuar.</div>
+      </section>
+
+      <!-- Step 2 -->
+      <section class="step" id="step2">
+        <div class="step-header">
+          <span class="step-number">2</span>
+          <h2>Estrutura da Aplicação</h2>
+        </div>
+        <p>Os arquivos ficam em <code>src/desafios/desafio-04/</code>:</p>
+        <pre><code>src/desafios/desafio-04/
+├── src/
+│   ├── app.js          <span class="comment"># servidor HTTP Node.js — 4 rotas + graceful shutdown</span>
+│   └── package.json    <span class="comment"># nome: devops-app, engines: node >=18</span>
+├── k8s/
+│   ├── 00-namespace.yaml
+│   ├── 01-serviceaccount.yaml
+│   ├── 02-configmap.yaml
+│   ├── 03-secret.yaml
+│   ├── 04-deployment.yaml
+│   ├── 05-service.yaml
+│   ├── 06-ingress.yaml
+│   ├── 07-hpa.yaml
+│   ├── 08-pdb.yaml
+│   └── 09-networkpolicy.yaml
+└── Dockerfile          <span class="comment"># multi-stage: builder + runtime (USER node 1000)</span></code></pre>
+
+        <h3 style="font-size:.9rem;font-weight:600;color:var(--accent);margin:.9rem 0 .4rem;">Rotas da aplicação</h3>
+        <pre><code><span class="comment"># GET /  →  info da app</span>
+{"app":"DevOps Lab — Desafio 4","version":"v1.0","env":"production","uptime":142,"requests":37,"hostname":"app-deployment-xxxxx"}
+
+<span class="comment"># GET /health  →  liveness probe</span>
+{"status":"ok","uptime":142,"timestamp":"...","env":"production"}
+
+<span class="comment"># GET /health/ready  →  readiness probe (disponível após 3s de warm-up)</span>
+{"status":"ready"}
+
+<span class="comment"># GET /metrics  →  formato Prometheus (texto plano)</span>
+app_requests_total 37
+app_uptime_seconds 142
+nodejs_heap_used_bytes 12345678</code></pre>
+      </section>
+
+      <!-- Step 3 -->
+      <section class="step" id="step3">
+        <div class="step-header">
+          <span class="step-number">3</span>
+          <h2>Build da Imagem dentro do Minikube</h2>
+        </div>
+        <p>A imagem precisa ser buildada <strong>dentro</strong> do Minikube (não no Docker Desktop local) porque o Deployment usa <code>imagePullPolicy: Never</code>:</p>
+        <pre><code><span class="comment"># A partir da raiz do projeto devopslab</span>
+<span class="cmd">minikube image build</span> <span class="flag">-t devops-app:v1.0</span> src/desafios/desafio-04
+
+<span class="comment"># Confirmar que a imagem existe no Minikube</span>
+<span class="cmd">minikube image ls</span> <span class="flag">| grep devops-app</span></code></pre>
+        <div class="tip" style="background:#2a1c1c;border-color:#f85149;border-left-color:#f85149;color:#ffa198;">
+          &#9888; <strong>imagePullPolicy: Never</strong> — se o build não for feito dentro do Minikube, os pods vão falhar com <code>ErrImageNeverPull</code>.
+        </div>
+      </section>
+
+      <!-- Step 4 -->
+      <section class="step" id="step4">
+        <div class="step-header">
+          <span class="step-number">4</span>
+          <h2>Aplicar os Manifests Kubernetes</h2>
+        </div>
+        <pre><code><span class="comment"># Aplicar todos os manifests em ordem</span>
+<span class="cmd">kubectl apply</span> <span class="flag">-f</span> src/desafios/desafio-04/k8s/
+
+<span class="comment"># Aguardar os 3 pods ficarem prontos (timeout 120s)</span>
+<span class="cmd">kubectl rollout status</span> deployment/app-deployment <span class="flag">-n app --timeout=120s</span>
+
+<span class="comment"># Verificar pods</span>
+<span class="cmd">kubectl get pods</span> <span class="flag">-n app</span>
+
+<span class="comment"># Verificar services</span>
+<span class="cmd">kubectl get svc</span> <span class="flag">-n app</span></code></pre>
+        <div class="tip">&#10003; Devem aparecer <strong>3 pods</strong> com status <strong>Running</strong> no namespace <code>app</code>.</div>
+
+        <h3 style="font-size:.9rem;font-weight:600;color:var(--accent);margin:.9rem 0 .4rem;">O que cada manifest cria</h3>
+        <div class="tools-grid">
+          <div class="tool-card"><div class="tool-name">00-namespace</div><div class="tool-desc">Namespace <code>app</code> — isolamento de todos os recursos.</div></div>
+          <div class="tool-card"><div class="tool-name">01-serviceaccount</div><div class="tool-desc">ServiceAccount + Role (get/list pods, configmaps, secrets) + RoleBinding.</div></div>
+          <div class="tool-card"><div class="tool-name">02-configmap</div><div class="tool-desc"><code>NODE_ENV=production</code> · <code>LOG_LEVEL=info</code> · <code>PORT=3000</code> · <code>METRICS_ENABLED=true</code></div></div>
+          <div class="tool-card"><div class="tool-name">03-secret</div><div class="tool-desc">Opaque Secret com <code>DATABASE_URL</code>, <code>REDIS_URL</code>, <code>JWT_SECRET</code> (valores de dev).</div></div>
+          <div class="tool-card"><div class="tool-name">04-deployment</div><div class="tool-desc">3 réplicas · RollingUpdate · liveness + readiness + startup probes · securityContext nonRoot · preStop sleep 5.</div></div>
+          <div class="tool-card"><div class="tool-name">05-service</div><div class="tool-desc">ClusterIP porta 80→3000 + NodePort porta 30080→3000.</div></div>
+          <div class="tool-card"><div class="tool-name">06-ingress</div><div class="tool-desc">Ingress nginx · host <code>app.local</code> · rotas <code>/</code> <code>/api</code> <code>/health</code> <code>/metrics</code>.</div></div>
+          <div class="tool-card"><div class="tool-name">07-hpa</div><div class="tool-desc">HPA · min 3 / max 10 réplicas · CPU 70% · Memory 80%.</div></div>
+          <div class="tool-card"><div class="tool-name">08-pdb</div><div class="tool-desc">PodDisruptionBudget · minAvailable 2.</div></div>
+          <div class="tool-card"><div class="tool-name">09-networkpolicy</div><div class="tool-desc">Ingress do namespace ingress-nginx e app · Egress DNS + HTTPS + interno.</div></div>
+        </div>
+      </section>
+
+      <!-- Step 5 -->
+      <section class="step" id="step5">
+        <div class="step-header">
+          <span class="step-number">5</span>
+          <h2>Habilitar Ingress e Configurar Acesso</h2>
+        </div>
+        <pre><code><span class="comment"># Habilitar o addon de Ingress nginx no Minikube</span>
+<span class="cmd">minikube addons enable ingress</span>
+
+<span class="comment"># Terminal Admin — manter aberto enquanto usar o Ingress</span>
+<span class="cmd">minikube tunnel</span></code></pre>
+        <p>Adicionar ao arquivo <code>C:\Windows\System32\drivers\etc\hosts</code> (requer admin):</p>
+        <pre><code>127.0.0.1  app.local</code></pre>
+        <pre><code><span class="comment"># Adicionar via PowerShell Admin</span>
+<span class="cmd">Add-Content</span> <span class="flag">-Path</span> "C:\Windows\System32\drivers\etc\hosts" <span class="flag">-Value</span> "127.0.0.1  app.local"</code></pre>
+        <div class="tip" style="background:#2a1c1c;border-color:#f85149;border-left-color:#f85149;color:#ffa198;">
+          &#9888; O terminal do <code>minikube tunnel</code> precisa ficar <strong>aberto</strong> enquanto usar o Ingress. Fechar o terminal derruba o túnel.
+        </div>
+      </section>
+
+      <!-- Step 6 -->
+      <section class="step" id="step6">
+        <div class="step-header">
+          <span class="step-number">6</span>
+          <h2>Validar no Browser</h2>
+        </div>
+        <p>Acesse as URLs abaixo no navegador:</p>
+        <pre><code>http://app.local/
+http://app.local/health
+http://app.local/health/ready
+http://app.local/metrics</code></pre>
+        <div class="tip">
+          &#9432; O campo <strong>"hostname"</strong> na resposta do <code>GET /</code> muda a cada request — prova que o load balancing entre os 3 pods está funcionando.
+        </div>
+        <div class="tip" style="background:#1c2a1c;border-color:#3fb950;border-left-color:#3fb950;color:#7ee787;">
+          &#9989; Se <code>GET /</code> retornar o JSON com <code>"env":"production"</code> e <code>"hostname"</code> variando, o ambiente está <strong>100% funcional end-to-end</strong>.
+        </div>
+
+        <h3 style="font-size:.9rem;font-weight:600;color:var(--accent);margin:.9rem 0 .4rem;">Troubleshooting</h3>
+        <div class="tools-grid">
+          <div class="tool-card">
+            <div class="tool-name">Página nginx de boas-vindas</div>
+            <div class="tool-desc">Ingress ativo mas pods ainda não subiram. Aguarde e recarregue.</div>
+          </div>
+          <div class="tool-card">
+            <div class="tool-name">ERR_NAME_NOT_RESOLVED</div>
+            <div class="tool-desc">Arquivo <code>hosts</code> não configurado corretamente — verifique a linha <code>127.0.0.1 app.local</code>.</div>
+          </div>
+          <div class="tool-card">
+            <div class="tool-name">ErrImageNeverPull</div>
+            <div class="tool-desc">Imagem não buildada dentro do Minikube. Execute novamente <code>minikube image build</code>.</div>
+          </div>
+          <div class="tool-card">
+            <div class="tool-name">Pods em CrashLoopBackOff</div>
+            <div class="tool-desc"><code>kubectl logs &lt;pod&gt; -n app</code> para ver o erro. Verifique ConfigMap e Secret.</div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <footer>
+    <p>DevOps Lab &mdash; Desafio 4 &mdash; <a href="../../index.html" style="display:inline-flex;align-items:center;gap:.35rem;color:var(--accent);text-decoration:none;"><img src="../../assets/img/home-icon.svg" width="14" height="14" alt=""/> Voltar ao portal</a></p>
+  </footer>
+
+  <script src="../../assets/js/main.js"></script>
+</body>
+</html>
