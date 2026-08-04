@@ -233,23 +233,74 @@ Request 4 → hostname: <span class="flag">app-deployment-54b88c5cb-l4ngw</span>
 Request 5 → hostname: <span class="flag">app-deployment-54b88c5cb-g9lxf</span></code></pre>
 
         <h3 style="font-size:.9rem;font-weight:600;color:var(--accent);margin:.9rem 0 .4rem;">Troubleshooting</h3>
-        <div class="tools-grid">
-          <div class="tool-card">
-            <div class="tool-name">Página nginx de boas-vindas</div>
-            <div class="tool-desc">Ingress ativo mas pods ainda não subiram. Aguarde e recarregue.</div>
+
+        <!-- Erro 1 -->
+        <div class="step" style="margin-bottom:.75rem;padding:1rem 1.25rem;">
+          <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;">
+            <span style="background:#2a1c1c;color:#f85149;border:1px solid #f85149;border-radius:6px;padding:.15rem .55rem;font-size:.75rem;font-weight:700;font-family:var(--font-mono);">Página nginx de boas-vindas</span>
           </div>
-          <div class="tool-card">
-            <div class="tool-name">ERR_NAME_NOT_RESOLVED</div>
-            <div class="tool-desc">Arquivo <code>hosts</code> não configurado corretamente — verifique a linha <code>127.0.0.1 app.local</code>.</div>
+          <p style="color:var(--muted);font-size:.87rem;margin-bottom:.4rem;">
+            <strong style="color:var(--text);">O que significa:</strong> O Ingress está ativo e respondendo, mas os pods da aplicação ainda não terminaram de subir. O nginx não sabe para onde rotear o tráfego e exibe sua própria página padrão.
+          </p>
+          <p style="color:var(--muted);font-size:.87rem;margin-bottom:.4rem;">
+            <strong style="color:var(--text);">O que fazer:</strong> Aguarde 30–60 segundos e recarregue o browser. Verifique se os 3 pods estão <code>Running</code>:
+          </p>
+          <pre style="margin-top:.35rem;"><code><span class="cmd">kubectl get pods</span> <span class="flag">-n app</span></code></pre>
+        </div>
+
+        <!-- Erro 2 -->
+        <div class="step" style="margin-bottom:.75rem;padding:1rem 1.25rem;">
+          <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;">
+            <span style="background:#2a1c1c;color:#f85149;border:1px solid #f85149;border-radius:6px;padding:.15rem .55rem;font-size:.75rem;font-weight:700;font-family:var(--font-mono);">ERR_NAME_NOT_RESOLVED</span>
           </div>
-          <div class="tool-card">
-            <div class="tool-name">ErrImageNeverPull</div>
-            <div class="tool-desc">Imagem não buildada dentro do Minikube. Execute novamente <code>minikube image build</code>.</div>
+          <p style="color:var(--muted);font-size:.87rem;margin-bottom:.4rem;">
+            <strong style="color:var(--text);">O que significa:</strong> O browser não consegue resolver o nome <code>app.local</code> para um IP. O sistema operacional não sabe que esse domínio existe pois a entrada não foi adicionada ao arquivo <code>hosts</code>.
+          </p>
+          <p style="color:var(--muted);font-size:.87rem;margin-bottom:.4rem;">
+            <strong style="color:var(--text);">O que fazer:</strong> Verifique se a linha abaixo existe em <code>C:\Windows\System32\drivers\etc\hosts</code> (requer PowerShell Admin):
+          </p>
+          <pre style="margin-top:.35rem;"><code>127.0.0.1  app.local
+
+<span class="comment"># Para adicionar via PowerShell Admin:</span>
+<span class="cmd">Add-Content</span> <span class="flag">-Path</span> "C:\Windows\System32\drivers\etc\hosts" <span class="flag">-Value</span> "127.0.0.1  app.local"</code></pre>
+        </div>
+
+        <!-- Erro 3 -->
+        <div class="step" style="margin-bottom:.75rem;padding:1rem 1.25rem;">
+          <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;">
+            <span style="background:#2a1c1c;color:#f85149;border:1px solid #f85149;border-radius:6px;padding:.15rem .55rem;font-size:.75rem;font-weight:700;font-family:var(--font-mono);">ErrImageNeverPull</span>
           </div>
-          <div class="tool-card">
-            <div class="tool-name">Pods em CrashLoopBackOff</div>
-            <div class="tool-desc"><code>kubectl logs &lt;pod&gt; -n app</code> para ver o erro. Verifique ConfigMap e Secret.</div>
+          <p style="color:var(--muted);font-size:.87rem;margin-bottom:.4rem;">
+            <strong style="color:var(--text);">O que significa:</strong> O Deployment tem <code>imagePullPolicy: Never</code> — o Kubernetes nunca tenta baixar a imagem de um registry externo, só usa imagens locais do Minikube. Se o build foi feito no Docker Desktop local em vez de dentro do Minikube, a imagem não existe no contexto correto e o pod não consegue subir.
+          </p>
+          <p style="color:var(--muted);font-size:.87rem;margin-bottom:.4rem;">
+            <strong style="color:var(--text);">O que fazer:</strong> Refaça o build <strong>dentro do Minikube</strong> a partir da raiz do projeto:
+          </p>
+          <pre style="margin-top:.35rem;"><code><span class="cmd">minikube image build</span> <span class="flag">-t devops-app:v1.0</span> src/desafios/desafio-04
+
+<span class="comment"># Confirmar que a imagem existe no Minikube</span>
+<span class="cmd">minikube image ls</span> <span class="flag">| grep devops-app</span></code></pre>
+        </div>
+
+        <!-- Erro 4 -->
+        <div class="step" style="margin-bottom:.75rem;padding:1rem 1.25rem;">
+          <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;">
+            <span style="background:#2a1c1c;color:#f85149;border:1px solid #f85149;border-radius:6px;padding:.15rem .55rem;font-size:.75rem;font-weight:700;font-family:var(--font-mono);">Pods em CrashLoopBackOff</span>
           </div>
+          <p style="color:var(--muted);font-size:.87rem;margin-bottom:.4rem;">
+            <strong style="color:var(--text);">O que significa:</strong> O pod sobe, falha, reinicia e falha de novo — entra em loop. As causas mais comuns são: erro no código do <code>app.js</code>, variável de ambiente ausente, ConfigMap ou Secret com valor incorreto, ou problema de permissão com o usuário <code>node</code> (uid 1000).
+          </p>
+          <p style="color:var(--muted);font-size:.87rem;margin-bottom:.4rem;">
+            <strong style="color:var(--text);">O que fazer:</strong> Veja o log do pod para identificar a mensagem de erro exata:
+          </p>
+          <pre style="margin-top:.35rem;"><code><span class="comment"># Ver logs do pod (substitua pelo nome real)</span>
+<span class="cmd">kubectl logs</span> &lt;nome-do-pod&gt; <span class="flag">-n app</span>
+
+<span class="comment"># Listar pods para copiar o nome</span>
+<span class="cmd">kubectl get pods</span> <span class="flag">-n app</span>
+
+<span class="comment"># Ver eventos de erro no namespace</span>
+<span class="cmd">kubectl get events</span> <span class="flag">-n app --sort-by=.lastTimestamp</span></code></pre>
         </div>
       </section>
 
