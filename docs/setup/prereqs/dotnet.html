@@ -1,0 +1,121 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Requisito .NET Framework para o DevOps Lab — verificar e instalar o .NET Framework 4.8." />
+  <title>Pré-requisito: .NET Framework — DevOps Lab</title>
+  <link rel="stylesheet" href="../../assets/css/style.css" />
+</head>
+<body>
+
+  <header>
+    <div class="container">
+      <span class="badge">&#9881; DevOps Lab &mdash; Pré-requisito</span>
+      <h1>.NET <span>Framework</span></h1>
+      <p>Versão mínima do .NET Framework exigida pelo Chocolatey e ferramentas de setup do Windows.</p>
+    </div>
+  </header>
+
+  <nav>
+    <div class="container">
+      <ul>
+        <li><a href="../index.html#prereqs" style="display:inline-flex;align-items:center;gap:.4rem;"><img src="../../assets/img/guide-icon.svg" width="18" height="18" alt="" style="vertical-align:middle;"/> Voltar aos Pré-requisitos</a></li>
+        <li><a href="#requisito">Requisito</a></li>
+        <li><a href="#verificar">Verificar</a></li>
+        <li><a href="#instalar">Instalar / Atualizar</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="container">
+
+      <section class="step" id="requisito">
+        <div class="step-header">
+          <span class="step-number">1</span>
+          <h2>Requisito mínimo</h2>
+        </div>
+        <p>
+          O <strong>Chocolatey</strong> (gerenciador de pacotes usado neste lab) exige o <strong>.NET Framework 4.8</strong> ou superior.
+          O .NET Framework 4.8 já vem pré-instalado no Windows 10 (versão 1903+) e em todas as edições do Windows 11.
+        </p>
+        <div class="tools-grid">
+          <div class="tool-card">
+            <div class="tool-name">.NET Framework 4.8+</div>
+            <div class="tool-desc">Exigido pelo <strong>Chocolatey</strong>. Já incluído no Windows 10 1903+ e Windows 11.</div>
+          </div>
+          <div class="tool-card">
+            <div class="tool-name">Validado neste lab</div>
+            <div class="tool-desc">.NET Framework <strong>4.8.09221</strong> (Release 533509) · .NET Runtime <strong>9.0.18</strong> · SDK <strong>9.0.316</strong></div>
+          </div>
+        </div>
+        <div class="tip" style="background:#1c2a1c;border-color:#3fb950;border-left-color:#3fb950;color:#7ee787;">
+          &#9989; Se você estiver no Windows 10 Build 19041+ ou Windows 11, o .NET Framework 4.8 já está instalado — nenhuma ação é necessária.
+        </div>
+      </section>
+
+      <section class="step" id="verificar">
+        <div class="step-header">
+          <span class="step-number">2</span>
+          <h2>Como verificar a versão instalada</h2>
+        </div>
+        <pre><code><span class="comment"># Verificar versão do .NET Framework via registro do Windows</span>
+<span class="cmd">Get-ChildItem</span> <span class="flag">'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP'</span> -Recurse <span class="flag">|</span>
+  <span class="cmd">Get-ItemProperty</span> <span class="flag">-Name</span> Version, Release <span class="flag">-ErrorAction</span> SilentlyContinue <span class="flag">|</span>
+  <span class="cmd">Where-Object</span> { <span class="flag">$_</span>.PSChildName <span class="flag">-match</span> <span class="flag">'^(?!S)\p{L}'</span> } <span class="flag">|</span>
+  <span class="cmd">Select-Object</span> PSChildName, Version, Release <span class="flag">|</span>
+  <span class="cmd">Format-Table</span> <span class="flag">-AutoSize</span>
+
+<span class="comment"># Verificar versão do .NET (Runtime moderno)</span>
+<span class="cmd">dotnet</span> <span class="flag">--version</span>
+<span class="cmd">dotnet</span> <span class="flag">--list-runtimes</span></code></pre>
+        <p>
+          No resultado, o campo <strong>Release</strong> indica a versão exata. O valor <code>528040</code> corresponde ao
+          .NET Framework 4.8 RTM. Qualquer valor igual ou superior está dentro do requisito.
+        </p>
+        <div class="tools-grid" style="margin-top:.75rem;">
+          <div class="tool-card">
+            <div class="tool-name">Release 528040</div>
+            <div class="tool-desc">.NET Framework 4.8 — versão de lançamento (mínimo exigido)</div>
+          </div>
+          <div class="tool-card">
+            <div class="tool-name">Release 533509+</div>
+            <div class="tool-desc">.NET Framework 4.8.1 — com atualizações (validado neste lab: 533509)</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="step" id="instalar">
+        <div class="step-header">
+          <span class="step-number">3</span>
+          <h2>Instalar ou atualizar o .NET Framework</h2>
+        </div>
+        <p>
+          Se o seu sistema não possui o .NET Framework 4.8 (Release &lt; 528040), instale-o manualmente.
+          Baixe o instalador offline na página oficial da Microsoft:
+        </p>
+        <div class="tip" style="background:#1c1f2a;border-color:#58a6ff;border-left-color:#58a6ff;color:#a5c8ff;">
+          &#9432; Acesse <strong>aka.ms/dotnet48</strong> no navegador para baixar o instalador offline do .NET Framework 4.8 diretamente da Microsoft.
+        </div>
+        <p>Alternativamente, instale ou atualize via <strong>Windows Update</strong>:</p>
+        <pre><code><span class="comment"># Abrir o Windows Update</span>
+<span class="cmd">Start-Process</span> <span class="flag">"ms-settings:windowsupdate"</span></code></pre>
+        <p>O .NET Framework 4.8 é entregue como atualização de sistema. Instale todas as atualizações disponíveis e reinicie.</p>
+        <div class="tip">
+          &#9432; Para instalar o <strong>.NET Runtime moderno</strong> (opcional para este lab, mas recomendado), use o Chocolatey após ele estar configurado:
+        </div>
+        <pre><code><span class="comment"># Instalar .NET Runtime mais recente via Chocolatey (opcional)</span>
+<span class="cmd">choco install</span> dotnet-runtime <span class="flag">-y</span></code></pre>
+      </section>
+
+    </div>
+  </main>
+
+  <footer>
+    <p>DevOps Lab &mdash; Pré-requisito: .NET Framework &mdash; <a href="../index.html" style="display:inline-flex;align-items:center;gap:.35rem;color:var(--accent);text-decoration:none;"><img src="../../assets/img/home-icon.svg" width="16" height="16" alt="" style="vertical-align:middle;"/> Voltar ao guia principal</a></p>
+  </footer>
+
+  <script src="../../assets/js/main.js"></script>
+</body>
+</html>

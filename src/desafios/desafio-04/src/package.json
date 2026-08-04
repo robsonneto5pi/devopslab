@@ -1,0 +1,12 @@
+{
+  "name": "devops-app",
+  "version": "1.0.0",
+  "description": "DevOps Lab — Desafio 4 Kubernetes Deployment",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
