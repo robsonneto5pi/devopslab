@@ -197,9 +197,40 @@ http://app.local/metrics</code></pre>
         <div class="tip">
           &#9432; O campo <strong>"hostname"</strong> na resposta do <code>GET /</code> muda a cada request — prova que o load balancing entre os 3 pods está funcionando.
         </div>
+
+        <!-- ── Resultado validado ── -->
         <div class="tip" style="background:#1c2a1c;border-color:#3fb950;border-left-color:#3fb950;color:#7ee787;">
-          &#9989; Se <code>GET /</code> retornar o JSON com <code>"env":"production"</code> e <code>"hostname"</code> variando, o ambiente está <strong>100% funcional end-to-end</strong>.
+          &#9989; <strong>Validado com sucesso</strong> — minikube v1.38.1 · docker-desktop v4.84.0 · Windows 11 Enterprise 25H2
         </div>
+
+        <h3 style="font-size:.9rem;font-weight:600;color:var(--accent);margin:.9rem 0 .4rem;">Resultado real — output das rotas</h3>
+        <pre><code><span class="comment"># GET /</span>
+{"app":"DevOps Lab — Desafio 4","version":"v1.0","env":"production","uptime":466,"requests":139,"hostname":"app-deployment-54b88c5cb-g9lxf"}
+
+<span class="comment"># GET /health</span>
+{"status":"ok","uptime":464,"timestamp":"2026-08-04T03:24:27.860Z","env":"production"}
+
+<span class="comment"># GET /health/ready</span>
+{"status":"ready"}
+
+<span class="comment"># GET /metrics</span>
+# HELP app_requests_total Total number of HTTP requests
+# TYPE app_requests_total counter
+app_requests_total 391
+# HELP app_uptime_seconds Application uptime in seconds
+# TYPE app_uptime_seconds gauge
+app_uptime_seconds 29204
+# HELP nodejs_heap_used_bytes Node.js heap memory used
+# TYPE nodejs_heap_used_bytes gauge
+nodejs_heap_used_bytes 5357352</code></pre>
+
+        <h3 style="font-size:.9rem;font-weight:600;color:var(--accent);margin:.9rem 0 .4rem;">Load balancing confirmado — 3 pods diferentes respondendo</h3>
+        <pre><code><span class="comment"># 5 requests consecutivos ao GET / — hostname rotaciona entre os 3 pods</span>
+Request 1 → hostname: <span class="flag">app-deployment-54b88c5cb-l4ngw</span>
+Request 2 → hostname: <span class="flag">app-deployment-54b88c5cb-g9lxf</span>
+Request 3 → hostname: <span class="flag">app-deployment-54b88c5cb-z7dwl</span>
+Request 4 → hostname: <span class="flag">app-deployment-54b88c5cb-l4ngw</span>
+Request 5 → hostname: <span class="flag">app-deployment-54b88c5cb-g9lxf</span></code></pre>
 
         <h3 style="font-size:.9rem;font-weight:600;color:var(--accent);margin:.9rem 0 .4rem;">Troubleshooting</h3>
         <div class="tools-grid">
