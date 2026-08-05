@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: financial-deployment
+  namespace: financial
+  labels:
+    app: financial-app
+    managed-by: kustomize
+    project: devops-lab
+    challenge: "11"
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0           # zero-downtime obrigatório
+  selector:
+    matchLabels:
+      app: financial-app
+  template:
+    metadata:
+      labels:
+        app: financial-app
+        managed-by: kustomize
+        project: devops-lab
+        challenge: "11"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "80"
+        prometheus.io/path: "/"
+    spec:
+      serviceAccountName: financial-app-sa
+      terminationGracePeriodSeconds: 30
+      imagePullSecrets:
+      - name: ghcr-secret               # criado via kubectl antes do apply
+      containers:
+      - name: financial-app
+        image: ghcr.io/vibecodia/vibecodia-finances-frontend:latest
+        imagePullPolicy: Always     # NUNCA Never — imagem vem do GHCR
+        ports:
+        - name: http
+          containerPort: 80         # Dockerfile.frontend expõe porta 80 (nginx padrão)
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+        livenessProbe:
+          httpGet:
+            path: /health           # endpoint com return 200 explícito no nginx.conf
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health           # endpoint com return 200 explícito no nginx.conf
+            port: http
+          initialDelaySeconds: 3
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 2
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 5"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          # runAsNonRoot: a imagem vibecodia-finances-frontend usa "user nginx" no nginx.conf
+          # e precisa iniciar como root (uid 0) para criar /var/cache/nginx — não suporta non-root
+          capabilities:
+            drop: [ALL]
+            add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE]  # necessárias para nginx iniciar e mudar para user nginx
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/conf.d
+          readOnly: true
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: financial-nginx-config
+          items:
+          - key: nginx.conf
+            path: default.conf      # nginx:alpine lê /etc/nginx/conf.d/default.conf

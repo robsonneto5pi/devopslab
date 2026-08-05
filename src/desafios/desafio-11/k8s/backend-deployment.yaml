@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: financial
+  labels:
+    app: backend
+    managed-by: kustomize
+    project: devops-lab
+    challenge: "11"
+spec:
+  # IMPORTANTE: manter 1 réplica fixa — o servidor tem cron jobs (02h e 09h)
+  # que disparariam em duplicata com múltiplas réplicas (push notifications + updates MongoDB)
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+        managed-by: kustomize
+        project: devops-lab
+        challenge: "11"
+    spec:
+      serviceAccountName: financial-app-sa
+      terminationGracePeriodSeconds: 30
+      imagePullSecrets:
+      - name: ghcr-secret               # criado via kubectl antes do apply
+      containers:
+      - name: backend
+        image: ghcr.io/vibecodia/vibecodia-finances-backend:latest
+        imagePullPolicy: Always
+        ports:
+        - name: http
+          containerPort: 3001
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: financial-backend-config
+        - secretRef:
+            name: financial-app-secret
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /api/health-check   # endpoint real do backend Express
+            port: http
+          initialDelaySeconds: 20
+          periodSeconds: 20
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health-check   # endpoint real do backend Express
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 5"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000             # user node na imagem node:20-alpine
+          capabilities:
+            drop: [ALL]

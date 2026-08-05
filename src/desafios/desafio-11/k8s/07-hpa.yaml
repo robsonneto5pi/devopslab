@@ -1,0 +1,47 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: financial-hpa
+  namespace: financial
+  labels:
+    app: financial-app
+    managed-by: kustomize
+    project: devops-lab
+    challenge: "11"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: financial-deployment
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60    # mais conservador que os 70% do Desafio 4
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300   # aguarda 5min antes de reduzir réplicas
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 30
+    scaleUp:
+      stabilizationWindowSeconds: 0     # escala para cima imediatamente
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 30
+      - type: Pods
+        value: 4
+        periodSeconds: 30
+      selectPolicy: Max                 # usa a política mais agressiva no scale-up

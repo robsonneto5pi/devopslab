@@ -1,0 +1,15 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: financial-pdb
+  namespace: financial
+  labels:
+    app: financial-app
+    managed-by: kustomize
+    project: devops-lab
+    challenge: "11"
+spec:
+  minAvailable: 1               # garante 1 réplica sempre disponível durante manutenção
+  selector:
+    matchLabels:
+      app: financial-app

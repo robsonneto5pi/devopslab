@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  # IMPORTANTE: o nome "backend" deve bater com o proxy_pass do nginx.conf:
+  #   proxy_pass http://backend:3001/api/;
+  name: backend
+  namespace: financial
+  labels:
+    app: backend
+    managed-by: kustomize
+    project: devops-lab
+    challenge: "11"
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+  ports:
+  - name: http
+    protocol: TCP
+    port: 3001
+    targetPort: 3001
+  sessionAffinity: None
