@@ -1,0 +1,50 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: financial-network-policy
+  namespace: financial
+  labels:
+    app: financial-app
+    managed-by: kustomize
+    project: devops-lab
+    challenge: "11"
+spec:
+  podSelector:
+    matchLabels:
+      app: financial-app
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    # CORREÇÃO: label real do namespace ingress-nginx neste cluster
+    # Verificado via: kubectl get namespace ingress-nginx --show-labels
+    - namespaceSelector:
+        matchLabels:
+          app.kubernetes.io/name: ingress-nginx
+    # Permite comunicação interna do mesmo namespace (frontend → backend e vice-versa)
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 3001
+  egress:
+  # Permite comunicação interna do namespace (frontend precisa chegar no backend)
+  - to:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 3001
+  # Permite apenas resolução DNS
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: UDP
+      port: 53
+  # Permite saída para MongoDB Atlas (HTTPS/TLS na porta 27017)
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 27017

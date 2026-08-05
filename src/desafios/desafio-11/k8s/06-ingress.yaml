@@ -1,0 +1,32 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: financial-ingress
+  namespace: financial
+  labels:
+    app: financial-app
+    managed-by: kustomize
+    project: devops-lab
+    challenge: "11"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: financial.local         # separado de app.local (Desafio 4)
+    http:
+      paths:
+      # API backend — deve vir ANTES do path "/" (match mais específico primeiro)
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 80
+      # Frontend SPA — catch-all
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: financial-service
+            port:
+              number: 80

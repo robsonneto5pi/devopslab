@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: financial
+  labels:
+    name: financial
+    environment: production
+    app.kubernetes.io/part-of: financial-app
+    app: financial-app
+    managed-by: kustomize
+    project: devops-lab
+    challenge: "11"

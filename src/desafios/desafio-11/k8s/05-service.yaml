@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: financial-service
+  namespace: financial
+  labels:
+    app: financial-app
+    managed-by: kustomize
+    project: devops-lab
+    challenge: "11"
+spec:
+  type: ClusterIP
+  selector:
+    app: financial-app
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: 80                # Dockerfile.frontend expõe porta 80
+  sessionAffinity: None
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: financial-service-nodeport
+  namespace: financial
+  labels:
+    app: financial-app
+    managed-by: kustomize
+    project: devops-lab
+    challenge: "11"
+spec:
+  type: NodePort
+  selector:
+    app: financial-app
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: 80                # Dockerfile.frontend expõe porta 80
+    nodePort: 30800               # sem conflito com D4 que usa 30080

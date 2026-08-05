@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: financial-nginx-config
+  namespace: financial
+  labels:
+    app: financial-app
+    managed-by: kustomize
+    project: devops-lab
+    challenge: "11"
+data:
+  nginx.conf: |
+    server {
+        listen 80;
+        root /usr/share/nginx/html;
+        index index.html;
+
+        # SPA routing — OBRIGATÓRIO
+        # Sem isso, qualquer refresh em /relatorios, /metas, /calendario retorna 404
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        # Proxy para o backend Node.js/Express
+        # O Service K8s do backend chama-se "backend" e ouve na porta 3001
+        location /api/ {
+            proxy_pass http://backend:3001/api/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # Manifest PWA
+        location = /manifest.json {
+            add_header Content-Type application/manifest+json;
+        }
+
+        # Cache 1 ano para assets estáticos (JS/CSS têm hash no nome pelo Vite build)
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|webp)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+
+        # Health check para Kubernetes probes (direto no Nginx, sem depender do backend)
+        location /health {
+            return 200 'ok';
+            add_header Content-Type text/plain;
+        }
+    }

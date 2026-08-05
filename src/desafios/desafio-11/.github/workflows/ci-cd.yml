@@ -1,0 +1,139 @@
+name: CI/CD — Financial App
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/desafios/desafio-11/**'
+      - '.github/workflows/ci-cd.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/desafios/desafio-11/**'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: robsonneto5pi/financial-app
+
+jobs:
+
+  # ── Job 1: CI — Build e validação (roda em todo push e PR) ──────────────────
+  ci:
+    name: CI — Build and Test
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: 'src/desafios/desafio-11/package-lock.json'
+
+    - name: Install dependencies
+      run: npm ci
+      working-directory: src/desafios/desafio-11
+
+    - name: Build (Vite → dist/)
+      run: npm run build
+      working-directory: src/desafios/desafio-11
+
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist
+        path: src/desafios/desafio-11/dist/
+        retention-days: 1
+
+  # ── Job 2: Docker — Build e push para GHCR (somente main) ──────────────────
+  docker:
+    name: Docker — Build and Push
+    runs-on: ubuntu-latest
+    needs: ci
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata (tag sha-<commit> + latest)
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=sha,prefix=sha-
+          type=ref,event=branch
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: src/desafios/desafio-11
+        file: src/desafios/desafio-11/infra/docker/Dockerfile.prod
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # ── Job 3: Deploy — kubectl set image (somente main, requer aprovação) ──────
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: docker
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+
+    - name: Set kubeconfig from secret
+      run: |
+        mkdir -p $HOME/.kube
+        echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+        chmod 600 $HOME/.kube/config
+
+    - name: Compute image tag (sha-<7 chars do commit>)
+      id: tag
+      run: |
+        TAG=$(echo "${{ github.sha }}" | cut -c 1-7)
+        echo "tag=sha-$TAG" >> $GITHUB_OUTPUT
+
+    - name: Update Deployment image
+      run: |
+        kubectl set image deployment/financial-deployment \
+          financial-app=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }} \
+          -n financial
+
+    - name: Wait for rollout to complete
+      run: |
+        kubectl rollout status deployment/financial-deployment \
+          -n financial \
+          --timeout=120s
+
+    - name: Verify post-deploy state
+      run: |
+        kubectl get deployment -n financial
+        kubectl get pods -n financial
+        kubectl get svc -n financial

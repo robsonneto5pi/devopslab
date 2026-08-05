@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Desafio 14 — Deploy Full-Stack no Kubernetes: frontend React + backend Node.js + MongoDB Atlas, namespace isolado, GHCR, CI/CD GitHub Actions." />
+  <title>Desafio 14 — Deploy Full-Stack no Kubernetes</title>
+  <link rel="stylesheet" href="../../assets/css/style.css" />
+</head>
+<body>
+
+  <header>
+    <div class="container">
+      <span class="badge">&#127381; Desafio 14</span>
+      <h1>Deploy <span>Full-Stack</span> no Kubernetes</h1>
+      <p>Frontend React + Backend Node.js + MongoDB Atlas no Minikube — namespace <code style="color:#3fb950;">financial</code>, imagem via GHCR, CI/CD com GitHub Actions e acesso em <code style="color:#3fb950;">http://financial.local</code>.</p>
+    </div>
+  </header>
+
+  <nav>
+    <div class="container">
+      <ul>
+        <li><a href="../../index.html" style="display:inline-flex;align-items:center;gap:.35rem;"><img src="../../assets/img/home-icon.svg" width="14" height="14" alt=""/> Portal</a></li>
+        <li><a href="#visao-geral">Visão Geral</a></li>
+        <li><a href="#step1">1. Pré-requisitos</a></li>
+        <li><a href="#step2">2. Arquitetura</a></li>
+        <li><a href="#step3">3. GHCR</a></li>
+        <li><a href="#step4">4. Secrets</a></li>
+        <li><a href="#step5">5. Manifests</a></li>
+        <li><a href="#step6">6. Ingress</a></li>
+        <li><a href="#step7">7. Validar</a></li>
+        <li><a href="#step8">8. CI/CD</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="container">
+
+      <!-- ── Visão Geral ── -->
+      <section class="step" id="visao-geral">
+        <div class="step-header">
+          <span class="step-number" style="background:#2a1f3b;color:#bc8cff;border-color:#bc8cff;font-size:.75rem;">INFO</span>
+          <h2>Visão Geral</h2>
+        </div>
+        <p>Objetivo: fazer o deploy de uma aplicação full-stack no Minikube com dois containers independentes no mesmo namespace, comunicação interna via Service, proxy reverso no Nginx, e acesso externo via Ingress.</p>
+
+        <div class="tools-grid">
+          <div class="tool-card">
+            <div class="tool-name">Frontend — Nginx SPA</div>
+            <div class="tool-desc">React + TypeScript + Vite compilado para <code>dist/</code>. Servido pelo Nginx na porta <code>80</code>. Proxy <code>/api</code> → backend interno.</div>
+          </div>
+          <div class="tool-card">
+            <div class="tool-name">Backend — Node.js API</div>
+            <div class="tool-desc">Express na porta <code>3001</code>. Autenticação por PIN. Conexão dinâmica ao MongoDB Atlas. Web Push (VAPID). Cron jobs diários.</div>
+          </div>
+          <div class="tool-card">
+            <div class="tool-name">k8s/ (13 manifests)</div>
+            <div class="tool-desc">Namespace · ServiceAccount · 2× ConfigMap · Secret · 2× Deployment · 3× Service · Ingress · HPA · PDB · NetworkPolicy · kustomization.</div>
+          </div>
+        </div>
+
+        <div class="tip" style="background:#1c1f2a;border-color:#58a6ff;border-left-color:#58a6ff;color:#a5c8ff;">
+          &#9432; Este desafio é a evolução do Desafio 4. A principal diferença está na arquitetura: dois runtimes distintos (Nginx + Node.js), imagem via registry externo (GHCR em vez de local), secrets obrigatórios em runtime e namespace isolado coexistindo com o namespace <code>app</code> do Desafio 4.
+        </div>
+
+        <h3 style="font-size:.9rem;font-weight:600;color:var(--accent);margin:.9rem 0 .4rem;">Comparativo Desafio 4 × Desafio 14</h3>
+        <div class="tools-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));">
+          <div class="tool-card"><div class="tool-name">Runtime</div><div class="tool-desc">D4: Node.js puro<br/>D14: Nginx SPA + Node.js API</div></div>
+          <div class="tool-card"><div class="tool-name">Imagem</div><div class="tool-desc">D4: build local Minikube<br/>D14: pull GHCR (registry externo)</div></div>
+          <div class="tool-card"><div class="tool-name">Namespace</div><div class="tool-desc">D4: <code>app</code><br/>D14: <code>financial</code> (isolado)</div></div>
+          <div class="tool-card"><div class="tool-name">Secrets</div><div class="tool-desc">D4: valores de dev hardcoded<br/>D14: VAPID + MongoDB Atlas (reais)</div></div>
+          <div class="tool-card"><div class="tool-name">CI/CD</div><div class="tool-desc">D4: scripts manuais<br/>D14: GitHub Actions 3 jobs</div></div>
+          <div class="tool-card"><div class="tool-name">Réplicas backend</div><div class="tool-desc">D4: 3 réplicas<br/>D14: 1 réplica fixa (cron jobs)</div></div>
+        </div>
+      </section>
+
+      <!-- ── Step 1 — Pré-requisitos ── -->
+      <section class="step" id="step1">
+        <div class="step-header">
+          <span class="step-number">1</span>
+          <h2>Pré-requisitos</h2>
+        </div>
+        <p>Verifique que o Minikube está rodando com o addon de Ingress habilitado e que o namespace <code>app</code> do Desafio 4 não será afetado:</p>
+        <pre><code><span class="comment"># Cluster rodando</span>
+<span class="cmd">kubectl get nodes</span>
+<span class="comment"># Esperado: minikube   Ready   control-plane</span>
+
+<span class="comment"># Ingress addon ativo</span>
+<span class="cmd">minikube addons list</span> | grep ingress
+<span class="comment"># Esperado: ingress   enabled ✅</span>
+
+<span class="comment"># Desafio 4 intacto</span>
+<span class="cmd">kubectl get all</span> <span class="flag">-n app</span>
+<span class="comment"># Esperado: 3 pods Running — nenhum será tocado</span></code></pre>
+
+        <h3 style="font-size:.9rem;font-weight:600;color:var(--accent);margin:.9rem 0 .4rem;">Ferramentas necessárias</h3>
+        <div class="tools-grid">
+          <div class="tool-card"><div class="tool-name">kubectl</div><div class="tool-desc">Verificar: <code>kubectl version --client</code></div></div>
+          <div class="tool-card"><div class="tool-name">Docker Desktop</div><div class="tool-desc">Aberto e estável antes de qualquer comando.</div></div>
+          <div class="tool-card"><div class="tool-name">Conta GitHub</div><div class="tool-desc">Com permissão <code>read:packages</code> no repositório <code>vibecodia/vibecodia-finances</code>.</div></div>
+          <div class="tool-card"><div class="tool-name">MongoDB Atlas URI</div><div class="tool-desc">Banco provisionado com usuário, senha e IP liberado na allowlist.</div></div>
+        </div>
+      </section>
+
+      <!-- ── Step 2 — Arquitetura ── -->
+      <section class="step" id="step2">
+        <div class="step-header">
+          <span class="step-number">2</span>
+          <h2>Arquitetura da Aplicação</h2>
+        </div>
+        <p>Dois containers no namespace <code>financial</code> com comunicação interna. O Nginx atua como proxy reverso: serve o React SPA e repassa chamadas <code>/api</code> para o backend.</p>
+        <pre><code>Browser
+  │
+  │  http://financial.local  (Ingress nginx)
+  ▼
+┌─────────────────────────────────────────────────────┐
+│  namespace: financial                                │
+│                                                     │
+│  Nginx — financial-service : 80                     │
+│  ├── location /          → serve dist/ (React SPA)  │
+│  └── location /api/      → proxy http://backend:3001│
+│                                   │                 │
+│                    ┌──────────────┘                 │
+│                    ▼                                │
+│  Node.js — backend : 3001                           │
+│  ├── POST /api/verify-pin   → autentica por PIN     │
+│  ├── GET/POST /api/transactions                     │
+│  ├── GET/POST /api/goals                            │
+│  ├── GET  /api/health-check → liveness probe        │
+│  └── Cron 02h + 09h  → MongoDB Atlas               │
+│                    │                                │
+└────────────────────┼────────────────────────────────┘
+                     ▼
+              MongoDB Atlas (externo)</code></pre>
+
+        <p>Estrutura de arquivos do desafio:</p>
+        <pre><code>src/desafios/desafio-11/
+├── k8s/
+│   ├── 00-namespace.yaml          <span class="comment"># namespace financial</span>
+│   ├── 01-serviceaccount.yaml     <span class="comment"># SA financial-app-sa + RBAC</span>
+│   ├── 01b-deployer-sa.yaml       <span class="comment"># SA financial-deployer (CI/CD)</span>
+│   ├── 02-configmap.yaml          <span class="comment"># nginx.conf com proxy /api</span>
+│   ├── 03-secret.yaml             <span class="comment"># placeholders — configurar via kubectl</span>
+│   ├── backend-configmap.yaml     <span class="comment"># PORT + NODE_ENV + TZ</span>
+│   ├── backend-deployment.yaml    <span class="comment"># Node.js 1 réplica fixa</span>
+│   ├── backend-service.yaml       <span class="comment"># ClusterIP name: backend</span>
+│   ├── 04-deployment.yaml         <span class="comment"># Nginx SPA 2 réplicas</span>
+│   ├── 05-service.yaml            <span class="comment"># ClusterIP + NodePort 30800</span>
+│   ├── 06-ingress.yaml            <span class="comment"># host financial.local</span>
+│   ├── 07-hpa.yaml                <span class="comment"># HPA frontend min:2 max:8</span>
+│   ├── 08-pdb.yaml                <span class="comment"># PDB minAvailable:1</span>
+│   ├── 09-networkpolicy.yaml      <span class="comment"># ingress-nginx + egress MongoDB</span>
+│   └── kustomization.yaml
+├── nginx/nginx.conf
+└── scripts/
+    ├── deploy.ps1
+    ├── verify.ps1
+    └── cleanup.ps1</code></pre>
+      </section>
+
+      <!-- ── Step 3 — GHCR ── -->
+      <section class="step" id="step3">
+        <div class="step-header">
+          <span class="step-number">3</span>
+          <h2>Autenticar no GHCR e Criar imagePullSecret</h2>
+        </div>
+        <p>As imagens são privadas no GitHub Container Registry. O Kubernetes precisa de credenciais para fazer o pull.</p>
+
+        <h3 style="font-size:.9rem;font-weight:600;color:var(--accent);margin:.9rem 0 .4rem;">3a. Gerar Personal Access Token (PAT)</h3>
+        <p>Acesse <code>github.com → Settings → Developer settings → Tokens (classic) → Generate new token (classic)</code> e marque <strong>apenas</strong> o escopo <code>read:packages</code>. Copie o token gerado (<code>ghp_xxx...</code>).</p>
+
+        <div class="tip" style="background:#2a1c1c;border-color:#f85149;border-left-color:#f85149;color:#ffa198;">
+          &#9888; O escopo <code>read:packages</code> é diferente das permissões de repositório. Ter acesso ao código <strong>não</strong> concede acesso às imagens Docker automaticamente.
+        </div>
+
+        <h3 style="font-size:.9rem;font-weight:600;color:var(--accent);margin:.9rem 0 .4rem;">3b. Login e imagePullSecret</h3>
+        <pre><code><span class="comment"># Login no GHCR com o PAT</span>
+<span class="cmd">echo</span> "ghp_SEU_TOKEN" | <span class="cmd">docker login</span> ghcr.io <span class="flag">-u SEU_USUARIO_GITHUB --password-stdin</span>
+
+<span class="comment"># Criar namespace (necessário antes do secret)</span>
+<span class="cmd">kubectl create namespace</span> financial
+
+<span class="comment"># Criar imagePullSecret no cluster</span>
+<span class="cmd">kubectl create secret docker-registry</span> ghcr-secret <span class="flag">\</span>
+  <span class="flag">--docker-server=</span>ghcr.io <span class="flag">\</span>
+  <span class="flag">--docker-username=</span>SEU_USUARIO_GITHUB <span class="flag">\</span>
+  <span class="flag">--docker-password=</span>ghp_SEU_TOKEN <span class="flag">\</span>
+  <span class="flag">-n</span> financial
+
+<span class="comment"># Confirmar pull das imagens</span>
+<span class="cmd">docker pull</span> ghcr.io/vibecodia/vibecodia-finances-frontend:latest
+<span class="cmd">docker pull</span> ghcr.io/vibecodia/vibecodia-finances-backend:latest</code></pre>
+        <div class="tip">&#10003; Ambos os Deployments referenciam <code>imagePullSecrets: [{name: ghcr-secret}]</code> — o secret criado aqui é usado automaticamente.</div>
+      </section>
+
+      <!-- ── Step 4 — Secrets ── -->
+      <section class="step" id="step4">
+        <div class="step-header">
+          <span class="step-number">4</span>
+          <h2>Configurar Secrets da Aplicação</h2>
+        </div>
+        <p>O backend precisa de 3 secrets obrigatórios. Sem eles, o processo Node.js encerra na inicialização. Os valores <strong>nunca</strong> são commitados no repositório — são injetados via kubectl.</p>
+
+        <div class="tools-grid">
+          <div class="tool-card">
+            <div class="tool-name">MONGO_CONN_MAP</div>
+            <div class="tool-desc">JSON com mapa PIN → URI MongoDB Atlas. Cada usuário tem um PIN único e seu próprio banco. Exemplo: <code>{"1234":"mongodb+srv://user:pass@cluster.mongodb.net/db"}</code></div>
+          </div>
+          <div class="tool-card">
+            <div class="tool-name">VAPID_PUBLIC_KEY</div>
+            <div class="tool-desc">Chave pública para Web Push Notifications. Gerada uma única vez e reutilizada. Se perder, todos os dispositivos cadastrados param de receber notificações.</div>
+          </div>
+          <div class="tool-card">
+            <div class="tool-name">VAPID_PRIVATE_KEY</div>
+            <div class="tool-desc">Par da chave pública. Nunca exposta ao browser. Usada para assinar os payloads de push notification.</div>
+          </div>
+        </div>
+
+        <h3 style="font-size:.9rem;font-weight:600;color:var(--accent);margin:.9rem 0 .4rem;">Gerar VAPID keys (uma única vez)</h3>
+        <pre><code><span class="comment"># Gera as chaves dentro do container — formato garantido para web-push@3.x</span>
+<span class="cmd">docker run</span> <span class="flag">--rm</span> ghcr.io/vibecodia/vibecodia-finances-backend:latest node <span class="flag">-e</span> <span class="flag">"</span>
+const wp = require('./node_modules/web-push');
+const k = wp.generateVAPIDKeys();
+console.log('PUBLIC:' + k.publicKey);
+console.log('PRIVATE:' + k.privateKey);
+<span class="flag">"</span></code></pre>
+
+        <div class="tip" style="background:#2a1c1c;border-color:#f85149;border-left-color:#f85149;color:#ffa198;">
+          &#9888; Não use <code>npx web-push generate-vapid-keys</code> — versões diferentes do Node.js geram formatos incompatíveis. Gere sempre dentro do container do backend.
+        </div>
+
+        <h3 style="font-size:.9rem;font-weight:600;color:var(--accent);margin:.9rem 0 .4rem;">Criar o secret no cluster</h3>
+        <pre><code><span class="comment"># Salvar o MONGO_CONN_MAP em arquivo (evita problemas de escaping no PowerShell)</span>
+<span class="comment"># Substituir PIN, user, pass, cluster e db pelos valores reais</span>
+$Utf8NoBom = New-Object System.Text.UTF8Encoding $False
+[System.IO.File]::WriteAllText(
+  "$env:TEMP\mcm.txt",
+  '{"SEU_PIN":"mongodb+srv://user:pass@cluster.mongodb.net/db?retryWrites=true&w=majority"}',
+  $Utf8NoBom
+)
+
+<span class="comment"># Criar secret (idempotente — pode rodar novamente para atualizar)</span>
+<span class="cmd">kubectl create secret generic</span> financial-app-secret <span class="flag">\</span>
+  <span class="flag">-n</span> financial <span class="flag">\</span>
+  <span class="flag">--from-file=</span>MONGO_CONN_MAP="$env:TEMP\mcm.txt" <span class="flag">\</span>
+  <span class="flag">--from-literal=</span>VAPID_PUBLIC_KEY="CHAVE_PUBLICA_GERADA" <span class="flag">\</span>
+  <span class="flag">--from-literal=</span>VAPID_PRIVATE_KEY="CHAVE_PRIVADA_GERADA" <span class="flag">\</span>
+  <span class="flag">--dry-run=client -o yaml</span> | <span class="cmd">kubectl apply -f</span> -
+
+<span class="comment"># Confirmar conteúdo sem BOM (primeiro byte deve ser 123 = '{')</span>
+<span class="cmd">kubectl get secret</span> financial-app-secret <span class="flag">-n financial \</span>
+  <span class="flag">-o jsonpath='{.data.MONGO_CONN_MAP}'</span> | <span class="cmd">ForEach-Object</span> {
+    [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_))
+  }</code></pre>
+      </section>
+
+      <!-- ── Step 5 — Manifests ── -->
+      <section class="step" id="step5">
+        <div class="step-header">
+          <span class="step-number">5</span>
+          <h2>Aplicar os Manifests via Kustomize</h2>
+        </div>
+        <pre><code><span class="comment"># Validar sintaxe sem aplicar</span>
+<span class="cmd">kubectl apply -k</span> src/desafios/desafio-11/k8s/ <span class="flag">--dry-run=client</span>
+<span class="comment"># Esperado: 19 recursos criados (dry run), 0 erros</span>
+
+<span class="comment"># Aplicar tudo</span>
+<span class="cmd">kubectl apply -k</span> src/desafios/desafio-11/k8s/
+
+<span class="comment"># Aguardar frontend (2 réplicas)</span>
+<span class="cmd">kubectl rollout status</span> deployment/financial-deployment <span class="flag">-n financial --timeout=120s</span>
+
+<span class="comment"># Aguardar backend (1 réplica)</span>
+<span class="cmd">kubectl rollout status</span> deployment/backend <span class="flag">-n financial --timeout=120s</span>
+
+<span class="comment"># Verificar todos os pods</span>
+<span class="cmd">kubectl get pods</span> <span class="flag">-n financial</span></code></pre>
+        <div class="tip">&#10003; Devem aparecer <strong>3 pods Running</strong>: 2 × financial-deployment + 1 × backend.</div>
+
+        <h3 style="font-size:.9rem;font-weight:600;color:var(--accent);margin:.9rem 0 .4rem;">O que cada manifest cria</h3>
+        <div class="tools-grid">
+          <div class="tool-card"><div class="tool-name">00-namespace</div><div class="tool-desc">Namespace <code>financial</code> — isolado do namespace <code>app</code> do Desafio 4.</div></div>
+          <div class="tool-card"><div class="tool-name">01-serviceaccount</div><div class="tool-desc">SA <code>financial-app-sa</code> + Role (get ConfigMap/Secret) + RoleBinding.</div></div>
+          <div class="tool-card"><div class="tool-name">01b-deployer-sa</div><div class="tool-desc">SA <code>financial-deployer</code> para CI/CD — Role mínima: patch/update Deployment + watch Pods.</div></div>
+          <div class="tool-card"><div class="tool-name">02-configmap</div><div class="tool-desc">nginx.conf com <code>try_files</code> para SPA routing e <code>proxy_pass</code> para <code>http://backend:3001</code>.</div></div>
+          <div class="tool-card"><div class="tool-name">03-secret</div><div class="tool-desc">Opaque Secret — MONGO_CONN_MAP + VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY. Apenas placeholders no repo.</div></div>
+          <div class="tool-card"><div class="tool-name">backend-configmap</div><div class="tool-desc"><code>PORT=3001</code> · <code>NODE_ENV=production</code> · <code>TZ=America/Sao_Paulo</code>.</div></div>
+          <div class="tool-card"><div class="tool-name">backend-deployment</div><div class="tool-desc"><strong>1 réplica fixa</strong> — cron jobs duplicariam com múltiplas réplicas. RollingUpdate + probe em <code>/api/health-check</code>.</div></div>
+          <div class="tool-card"><div class="tool-name">backend-service</div><div class="tool-desc">ClusterIP name <code>backend</code> porta 3001 — o nome é crítico: o nginx.conf faz <code>proxy_pass http://backend:3001</code>.</div></div>
+          <div class="tool-card"><div class="tool-name">04-deployment</div><div class="tool-desc">Nginx SPA · 2 réplicas · RollingUpdate zero-downtime · probe em <code>/health</code> · nginx.conf montado via ConfigMap.</div></div>
+          <div class="tool-card"><div class="tool-name">05-service</div><div class="tool-desc">ClusterIP 80→80 + NodePort 30800 para acesso direto sem Ingress.</div></div>
+          <div class="tool-card"><div class="tool-name">06-ingress</div><div class="tool-desc">Host <code>financial.local</code> · path <code>/api</code> → backend · path <code>/</code> → frontend.</div></div>
+          <div class="tool-card"><div class="tool-name">07-hpa</div><div class="tool-desc">HPA frontend · min 2 / max 8 réplicas · CPU 60% · Memory 80%.</div></div>
+          <div class="tool-card"><div class="tool-name">08-pdb</div><div class="tool-desc">PodDisruptionBudget · minAvailable 1 — sempre 1 réplica disponível durante manutenção.</div></div>
+          <div class="tool-card"><div class="tool-name">09-networkpolicy</div><div class="tool-desc">Ingress: <code>ingress-nginx</code> + pods internos. Egress: DNS + MongoDB Atlas porta 27017 + tráfego interno.</div></div>
+        </div>
+      </section>
+
+      <!-- ── Step 6 — Ingress ── -->
+      <section class="step" id="step6">
+        <div class="step-header">
+          <span class="step-number">6</span>
+          <h2>Configurar Acesso via Ingress</h2>
+        </div>
+        <pre><code><span class="comment"># Terminal Admin — manter aberto enquanto usar o Ingress</span>
+<span class="cmd">minikube tunnel</span></code></pre>
+
+        <p>Adicionar ao arquivo <code>C:\Windows\System32\drivers\etc\hosts</code> (requer admin):</p>
+        <pre><code>127.0.0.1  financial.local</code></pre>
+        <pre><code><span class="comment"># Adicionar via PowerShell Admin</span>
+<span class="cmd">Add-Content</span> <span class="flag">-Path</span> "C:\Windows\System32\drivers\etc\hosts" <span class="flag">-Value</span> "127.0.0.1  financial.local"</code></pre>
+
+        <p>Ou acessar via port-forward sem necessidade de Ingress:</p>
+        <pre><code><span class="comment"># Mantém o terminal aberto — acesse http://localhost:8080</span>
+<span class="cmd">kubectl port-forward</span> <span class="flag">-n financial</span> svc/financial-service 8080:80</code></pre>
+
+        <div class="tip" style="background:#2a1c1c;border-color:#f85149;border-left-color:#f85149;color:#ffa198;">
+          &#9888; O <code>minikube tunnel</code> precisa ficar <strong>aberto</strong> enquanto usar o Ingress. O port-forward é a alternativa mais simples para testes locais.
+        </div>
+      </section>
+
+      <!-- ── Step 7 — Validar ── -->
+      <section class="step" id="step7">
+        <div class="step-header">
+          <span class="step-number">7</span>
+          <h2>Validar o Deploy</h2>
+        </div>
+
+        <pre><code><span class="comment"># Estado completo do namespace</span>
+<span class="cmd">kubectl get all</span> <span class="flag">-n financial</span>
+
+<span class="comment"># Backend saudável</span>
+<span class="cmd">kubectl logs</span> <span class="flag">-n financial</span> deployment/backend <span class="flag">--tail=5</span>
+<span class="comment"># Esperado: "Server running on port 3001"</span>
+
+<span class="comment"># Teste direto no health-check do backend</span>
+<span class="cmd">kubectl port-forward</span> <span class="flag">-n financial</span> svc/backend 3001:3001
+<span class="comment"># Em outro terminal:</span>
+<span class="cmd">Invoke-WebRequest</span> http://localhost:3001/api/health-check <span class="flag">-UseBasicParsing</span>
+<span class="comment"># Esperado: 200 OK — {"status":"ok","message":"Backend is healthy"}</span>
+
+<span class="comment"># Teste do proxy frontend → backend</span>
+<span class="cmd">kubectl port-forward</span> <span class="flag">-n financial</span> svc/financial-service 8080:80
+<span class="comment"># Em outro terminal:</span>
+<span class="cmd">Invoke-WebRequest</span> http://localhost:8080/api/health-check <span class="flag">-UseBasicParsing</span>
+<span class="comment"># Esperado: 200 OK — prova que nginx → backend está funcionando</span>
+
+<span class="comment"># Desafio 4 intacto — confirmar isolamento</span>
+<span class="cmd">kubectl get all</span> <span class="flag">-n app</span>
+<span class="comment"># Esperado: 3 pods Running — sem alteração</span></code></pre>
+
+        <div class="tip" style="background:#1c2a1c;border-color:#3fb950;border-left-color:#3fb950;color:#7ee787;">
+          &#9989; <strong>Validado com sucesso</strong> — minikube v1.38.1 · docker-desktop v4.84.0 · Windows 11 Enterprise 25H2
+        </div>
+
+        <h3 style="font-size:.9rem;font-weight:600;color:var(--accent);margin:.9rem 0 .4rem;">Resultado esperado — output de validação</h3>
+        <pre><code><span class="comment"># kubectl get all -n financial</span>
+NAME                                        READY   STATUS    RESTARTS   AGE
+pod/backend-556d756dbc-7hvrr                1/1     Running   0          5m
+pod/financial-deployment-6594647d7f-gml47   1/1     Running   0          5m
+pod/financial-deployment-6594647d7f-jcbkt   1/1     Running   0          5m
+
+NAME                                   TYPE        CLUSTER-IP      PORT(S)
+service/backend                        ClusterIP   10.98.142.25    3001/TCP
+service/financial-service              ClusterIP   10.101.132.192  80/TCP
+service/financial-service-nodeport     NodePort    10.101.106.0    80:30800/TCP
+
+NAME                                   READY   UP-TO-DATE   AVAILABLE
+deployment.apps/backend                1/1     1            1
+deployment.apps/financial-deployment   2/2     2            2</code></pre>
+
+        <h3 style="font-size:.9rem;font-weight:600;color:var(--accent);margin:.9rem 0 .4rem;">Troubleshooting</h3>
+
+        <div class="step" style="margin-bottom:.75rem;padding:1rem 1.25rem;">
+          <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;">
+            <span style="background:#2a1c1c;color:#f85149;border:1px solid #f85149;border-radius:6px;padding:.15rem .55rem;font-size:.75rem;font-weight:700;font-family:var(--font-mono);">ImagePullBackOff</span>
+          </div>
+          <p style="color:var(--muted);font-size:.87rem;margin-bottom:.4rem;"><strong style="color:var(--text);">Causa:</strong> o secret <code>ghcr-secret</code> não existe, está com token expirado, ou a conta não tem permissão <code>read:packages</code> no pacote da org.</p>
+          <pre style="margin-top:.35rem;"><code><span class="cmd">kubectl get secret</span> ghcr-secret <span class="flag">-n financial</span>
+<span class="cmd">kubectl describe pod</span> <span class="flag">-n financial -l app=financial-app</span> | <span class="cmd">Select-String</span> "pull"</code></pre>
+        </div>
+
+        <div class="step" style="margin-bottom:.75rem;padding:1rem 1.25rem;">
+          <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;">
+            <span style="background:#2a1c1c;color:#f85149;border:1px solid #f85149;border-radius:6px;padding:.15rem .55rem;font-size:.75rem;font-weight:700;font-family:var(--font-mono);">Backend CrashLoopBackOff</span>
+          </div>
+          <p style="color:var(--muted);font-size:.87rem;margin-bottom:.4rem;"><strong style="color:var(--text);">Causa mais comum:</strong> VAPID key com formato inválido ou MONGO_CONN_MAP com JSON malformado (BOM no início do arquivo).</p>
+          <pre style="margin-top:.35rem;"><code><span class="cmd">kubectl logs</span> <span class="flag">-n financial -l app=backend --tail=20</span>
+<span class="comment"># Se "Vapid public key should be 65 bytes": gere as keys dentro do container (Step 4)</span>
+<span class="comment"># Se "Erro ao parsear MONGO_CONN_MAP": verifique BOM no arquivo com:</span>
+<span class="cmd">kubectl get secret</span> financial-app-secret <span class="flag">-n financial \</span>
+  <span class="flag">-o jsonpath='{.data.MONGO_CONN_MAP}'</span> | <span class="cmd">ForEach-Object</span> {
+    $b = [Convert]::FromBase64String($_)
+    "Primeiro byte: $($b[0]) (deve ser 123 = '{')"
+  }</code></pre>
+        </div>
+
+        <div class="step" style="margin-bottom:.75rem;padding:1rem 1.25rem;">
+          <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;">
+            <span style="background:#2a1c1c;color:#f85149;border:1px solid #f85149;border-radius:6px;padding:.15rem .55mm;font-size:.75rem;font-weight:700;font-family:var(--font-mono);">Frontend CrashLoopBackOff — Permission denied</span>
+          </div>
+          <p style="color:var(--muted);font-size:.87rem;margin-bottom:.4rem;"><strong style="color:var(--text);">Causa:</strong> <code>securityContext.runAsUser: 101</code> impede o Nginx de criar <code>/var/cache/nginx</code>. A imagem precisa iniciar como root para criar os diretórios temporários.</p>
+          <pre style="margin-top:.35rem;"><code><span class="comment"># Verificar o nginx.conf dentro da imagem — se tiver "user nginx;" precisa iniciar como root</span>
+<span class="cmd">docker run</span> <span class="flag">--rm --entrypoint cat</span> ghcr.io/vibecodia/vibecodia-finances-frontend:latest /etc/nginx/nginx.conf | <span class="cmd">Select-String</span> "^user"
+<span class="comment"># Se retornar "user  nginx;" → remover runAsNonRoot e runAsUser do securityContext</span></code></pre>
+        </div>
+
+        <div class="step" style="margin-bottom:.75rem;padding:1rem 1.25rem;">
+          <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;">
+            <span style="background:#2a1c1c;color:#f85149;border:1px solid #f85149;border-radius:6px;padding:.15rem .55rem;font-size:.75rem;font-weight:700;font-family:var(--font-mono);">502 Bad Gateway via Ingress</span>
+          </div>
+          <p style="color:var(--muted);font-size:.87rem;margin-bottom:.4rem;"><strong style="color:var(--text);">Causa mais comum:</strong> NetworkPolicy bloqueando o Ingress Controller. O namespace <code>ingress-nginx</code> precisa ter o label <code>app.kubernetes.io/name: ingress-nginx</code> para a policy liberar.</p>
+          <pre style="margin-top:.35rem;"><code><span class="comment"># Verificar labels reais do namespace ingress-nginx</span>
+<span class="cmd">kubectl get namespace</span> ingress-nginx <span class="flag">--show-labels</span>
+<span class="comment"># O label no namespaceSelector da NetworkPolicy deve bater exatamente</span></code></pre>
+        </div>
+      </section>
+
+      <!-- ── Step 8 — CI/CD ── -->
+      <section class="step" id="step8">
+        <div class="step-header">
+          <span class="step-number">8</span>
+          <h2>CI/CD — GitHub Actions</h2>
+        </div>
+        <p>O workflow <code>.github/workflows/ci-cd.yml</code> automatiza build, push e deploy a cada push na branch <code>main</code> que altere arquivos em <code>src/desafios/desafio-11/</code>.</p>
+
+        <pre><code>Push para main
+  │
+  ▼ Job: ci  (sempre — inclusive em PRs)
+  ├── npm ci
+  ├── npm run build  (Vite → dist/)
+  └── upload artifact dist/
+  │
+  ▼ Job: docker  (somente main)
+  ├── docker/login-action → ghcr.io
+  ├── docker/build-push-action
+  └── tags: sha-&lt;7-chars-commit&gt; + latest
+  │
+  ▼ Job: deploy  (somente main · environment: production)
+  ├── kubectl set image deployment/financial-deployment ...
+  ├── kubectl rollout status --timeout=120s
+  └── kubectl get deployment/pods/svc -n financial</code></pre>
+
+        <h3 style="font-size:.9rem;font-weight:600;color:var(--accent);margin:.9rem 0 .4rem;">Secrets necessários no GitHub</h3>
+        <div class="tools-grid">
+          <div class="tool-card"><div class="tool-name">KUBECONFIG</div><div class="tool-desc">kubeconfig base64 do SA <code>financial-deployer</code> — Role mínima: patch Deployment + watch Pods. Nunca use kubeconfig de admin.</div></div>
+          <div class="tool-card"><div class="tool-name">GITHUB_TOKEN</div><div class="tool-desc">Automático — fornecido pelo GitHub Actions. Usado para push no GHCR.</div></div>
+        </div>
+
+        <h3 style="font-size:.9rem;font-weight:600;color:var(--accent);margin:.9rem 0 .4rem;">Obter token do SA deployer (Kubernetes 1.24+)</h3>
+        <pre><code><span class="comment"># Gerar token com duração de 1 ano para o SA financial-deployer</span>
+<span class="cmd">kubectl create token</span> financial-deployer <span class="flag">-n financial --duration=8760h</span>
+
+<span class="comment"># Ou criar Secret permanente do tipo service-account-token</span>
+<span class="cmd">kubectl apply -f</span> - <span class="flag">&lt;&lt;EOF</span>
+apiVersion: v1
+kind: Secret
+metadata:
+  name: financial-deployer-token
+  namespace: financial
+  annotations:
+    kubernetes.io/service-account.name: financial-deployer
+type: kubernetes.io/service-account-token
+EOF
+<span class="cmd">kubectl get secret</span> financial-deployer-token <span class="flag">-n financial \</span>
+  <span class="flag">-o jsonpath='{.data.token}'</span> | <span class="cmd">ForEach-Object</span> {
+    [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_))
+  }</code></pre>
+
+        <div class="tip">
+          &#9432; Configure o token obtido acima como secret <code>KUBECONFIG</code> em <code>github.com → Settings → Secrets → Actions</code>.
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <footer>
+    <p>DevOps Lab &mdash; Desafio 14 &mdash; <a href="../../index.html" style="display:inline-flex;align-items:center;gap:.35rem;color:var(--accent);text-decoration:none;"><img src="../../assets/img/home-icon.svg" width="14" height="14" alt=""/> Voltar ao portal</a></p>
+  </footer>
+
+  <script src="../../assets/js/main.js"></script>
+</body>
+</html>
